@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -19,6 +20,7 @@ const (
 
 var (
 	dir         string
+	wg          sync.WaitGroup
 	serverPaths = []string{
 		"E:/git/go-opencc/test",
 	}
@@ -73,8 +75,11 @@ func main() {
 	}
 
 	for _, path := range filepaths {
+		wg.Add(1)
 		go convert(path)
 	}
+
+	wg.Wait()
 
 	fmt.Printf("total file count : %d\n", len(filepaths))
 	fmt.Printf("time : %v\n", time.Since(start))
@@ -92,6 +97,8 @@ func checkFiletype(file string) bool {
 }
 
 func convert(fp string) {
+	defer wg.Done()
+
 	data, err := ioutil.ReadFile(fp)
 	if err != nil {
 		fmt.Println(err)
