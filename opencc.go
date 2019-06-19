@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -15,10 +18,23 @@ const (
 )
 
 var (
-	dir   string
-	count int
-	paths = []string{
-		"F:/example",
+	dir         string
+	serverPaths = []string{
+		"E:/git/go-opencc/test",
+	}
+	filetype    = []string{".lua", ".json", ".ts", ".txt"}
+	replaceText = map[string]string{
+		"首冲":  "首儲",
+		"邮件":  "信箱",
+		"充值":  "儲值",
+		"点击":  "點選",
+		"激活码": "禮品碼",
+		"变强":  "成長",
+		"帮派":  "公會",
+		"登录":  "登入",
+		"登陆":  "登入",
+		"确定":  "確認",
+		"服务器": "伺服器",
 	}
 )
 
@@ -33,48 +49,69 @@ func main() {
 		return
 	}
 
-	filepaths := []string{}
+	paths := []string{}
 	if os.Args[1] == "server" {
-		filepaths = paths
+		paths = serverPaths
 	} else {
-		filepaths = os.Args[1:]
+		paths = os.Args[1:]
 	}
 
-	for _, path := range filepaths {
-		err = filepath.Walk(path, convert)
+	start := time.Now()
+
+	filepaths := []string{}
+	for _, path := range paths {
+		err = filepath.Walk(path, func(fp string, f os.FileInfo, err error) error {
+			if checkFiletype(fp) {
+				filepaths = append(filepaths, fp)
+				fmt.Println(fp)
+			}
+			return nil
+		})
 		if err != nil {
 			fmt.Printf("filepath.Walk error %v\n", err)
 		}
 	}
 
-	fmt.Printf("total file count : %d\n", count)
+	for _, path := range filepaths {
+		go convert(path)
+	}
 
-	time.Sleep(5 * time.Second)
+	fmt.Printf("total file count : %d\n", len(filepaths))
+	fmt.Printf("time : %v\n", time.Since(start))
+
+	time.Sleep(1 * time.Second)
 }
 
-func convert(fp string, f os.FileInfo, err error) error {
-	if f == nil {
-		return err
+func checkFiletype(file string) bool {
+	for _, v := range filetype {
+		if strings.HasSuffix(file, v) {
+			return true
+		}
+	}
+	return false
+}
+
+func convert(fp string) {
+	data, err := ioutil.ReadFile(fp)
+	if err != nil {
+		fmt.Println(err)
 	}
 
-	if f.IsDir() {
-		return nil
+	for k, v := range replaceText {
+		data = bytes.Replace(data, []byte(k), []byte(v), -1)
 	}
 
-	if suffix != "" && filepath.Ext(fp) != suffix {
-		return nil
+	err = ioutil.WriteFile(fp, data, 0666)
+	if err != nil {
+		fmt.Println(err)
 	}
-
-	fmt.Println(fp)
 
 	command := dir + "/opencc-1.0.4/bin/opencc.exe -i " + fp + " -o " + fp + " -c " + dir + "/opencc-1.0.4/share/opencc/" + config + ".json"
-	cmd := exec.Command("cmd.exe", "/c", "start "+command)
+	// cmd := exec.Command("cmd.exe", "/c", "start "+command)
+	list := strings.Split(command, " ")
+	cmd := exec.Command(list[0], list[1:]...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	if err := cmd.Run(); err != nil {
-		return err
+		fmt.Println(err)
 	}
-
-	count = count + 1
-
-	return nil
 }
